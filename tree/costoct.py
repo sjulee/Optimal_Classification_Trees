@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # coding: utf-8
-# author: Bo Tang
+# author: Bo Tang/Sun Ju Lee
 
 from collections import namedtuple
 import numpy as np
@@ -9,11 +9,12 @@ import gurobipy as gp
 from gurobipy import GRB
 from sklearn import tree
 
-class optimalDecisionTreeClassifier:
+class optimalCostSensitiveDecisionTreeClassifier:
     """
     optimal classification tree
     """
-    def __init__(self, max_depth=3, min_samples_split=2, alpha=0, warmstart=True, timelimit=600, output=True):
+    def __init__(self, class_weights, max_depth=3, min_samples_split=2, alpha=0, warmstart=True, timelimit=600, output=True):
+        self.class_weights = class_weights
         self.max_depth = max_depth
         self.min_samples_split = min_samples_split
         self.alpha = alpha
@@ -95,8 +96,8 @@ class optimalDecisionTreeClassifier:
         m = gp.Model('m')
 
         # output
-        m.Params.outputFlag = self.output
-        m.Params.LogToConsole = self.output
+        m.Params.outputFlag = 1#self.output
+        m.Params.LogToConsole = 1#self.output
         # time limit
         m.Params.timelimit = self.timelimit
         # parallel
@@ -115,12 +116,15 @@ class optimalDecisionTreeClassifier:
         L = m.addVars(self.l_index, vtype=GRB.CONTINUOUS, name='L') # leaf node misclassified
         M = m.addVars(self.labels, self.l_index, vtype=GRB.CONTINUOUS, name='M') # leaf node samples with label
         N = m.addVars(self.l_index, vtype=GRB.CONTINUOUS, name='N') # leaf node samples
-
+        
         # calculate baseline accuracy
         baseline = self._calBaseline(y)
 
         # calculate minimum distance
         min_dis = self._calMinDist(x)
+
+        # calculate big M
+        bigM = self.n*max(self.class_weights)
 
         # objective function
         obj = L.sum() / baseline + self.alpha * d.sum()
@@ -128,9 +132,8 @@ class optimalDecisionTreeClassifier:
 
         # constraints
         # (20)
-        m.addConstrs(L[t] >= N[t] - M[k,t] - self.n * (1 - c[k,t]) for t in self.l_index for k in self.labels)
-        # (21)
-        m.addConstrs(L[t] <= N[t] - M[k,t] + self.n * c[k,t] for t in self.l_index for k in self.labels)
+        m.addConstrs(L[t] <= self.class_weights[k]*M[k,t] + bigM*(c[k,t]) for t in self.l_index for k in self.labels)
+        m.addConstrs(L[t] >= self.class_weights[k]*M[k,t] - bigM*(1-c[k,t]) for t in self.l_index for k in self.labels)
         # (17)
         m.addConstrs(gp.quicksum((y[i] == k) * z[i,t] for i in range(self.n)) == M[k,t]
                                  for t in self.l_index for k in self.labels)
@@ -172,13 +175,13 @@ class optimalDecisionTreeClassifier:
 
         return m, a, b, c, d, l
 
-    @staticmethod
-    def _calBaseline(y):
+    def _calBaseline(self, y):
         """
         obtain baseline accuracy by simply predicting the most popular class
         """
         mode = stats.mode(y)[0][0]
-        return np.sum(y == mode)
+        #return np.sum(y == mode)
+        return self.class_weights[np.where(self.labels==mode)[0][0]]*np.sum(y==mode)
 
     @staticmethod
     def _calMinDist(x):

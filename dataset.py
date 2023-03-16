@@ -73,7 +73,7 @@ def loadBreastCancer():
     """
     load breast-cancer dataset
     """
-    df = pd.read_csv('./data/breast-cancer/breast-cancer.data', header=None, delimiter=',')
+    df = pd.read_csv('../data/breast-cancer/breast-cancer.data', header=None, delimiter=',')
     for i in range(9):
         df = df[df[i] != '?']
     df = df.apply(lambda x: pd.factorize(x)[0])

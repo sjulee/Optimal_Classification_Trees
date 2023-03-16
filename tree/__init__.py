@@ -5,3 +5,5 @@
 from .oct import optimalDecisionTreeClassifier
 from .binoct import binOptimalDecisionTreeClassifier
 from .mfoct import maxFlowOptimalDecisionTreeClassifier
+from .costoct import optimalCostSensitiveDecisionTreeClassifier
+
